@@ -14,6 +14,12 @@ class GameViewController: UIViewController, SCNSceneRendererDelegate {
 
     var scene: SCNScene!
     var world: SCNNode!
+    var lilCube: SCNBox = {
+        let box = SCNBox(width: 0.1, height: 0.05, length: 0.1, chamferRadius: 0)
+        box.firstMaterial?.diffuse.contents = UIColor.white
+        return box
+    }()
+    var cities = [SCNNode]()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,8 +30,6 @@ class GameViewController: UIViewController, SCNSceneRendererDelegate {
             button.setImage(img, for: .normal)
         }
         
-//        button.imageView = UIImageView(image: )
-//        button.backgroundColor = .yellow
         view.addSubview(button)
         
         scene = SCNScene(named: "art.scnassets/level1.scn")!
@@ -37,7 +41,7 @@ class GameViewController: UIViewController, SCNSceneRendererDelegate {
         scnView.delegate = self
         scnView.rendersContinuously = true
         //scnView.allowsCameraControl = true
-        //scnView.showsStatistics = true
+        scnView.showsStatistics = true
         
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         scnView.addGestureRecognizer(tapGesture)
@@ -76,19 +80,58 @@ class GameViewController: UIViewController, SCNSceneRendererDelegate {
             print(verde)
             if let vg = verde.childNodes.first?.geometry {
                 verde.physicsBody =  SCNPhysicsBody(type: .kinematic, shape: SCNPhysicsShape(geometry: vg, options: nil))
-                print("verde pb")
+                let vertexSources = vg.sources(for: .vertex)
+                if let vertexSource = vertexSources.first {
+                    let stride = vertexSource.dataStride
+                    let offset = vertexSource.dataOffset
+                    let vectorCount = vertexSource.vectorCount
+                    let componentsPerVector = vertexSource.componentsPerVector
+                    let bytesPerVector = componentsPerVector * vertexSource.bytesPerComponent
+                    print("stride: \(stride)")
+                    print("offset: \(offset)")
+                    print("vectorCount: \(vectorCount)")
+                    print("componentsPerVector: \(componentsPerVector)")
+                    print("bytesPerVector: \(bytesPerVector)")
+                    
+                    var vectors = [SCNVector3](repeating: SCNVector3Zero, count: vectorCount)
+                    var vertices = vectors.enumerated().map { (index: Int, element: SCNVector3) -> SCNVector3 in
+                        let vectorData = UnsafeMutablePointer<Float>.allocate(capacity: componentsPerVector)
+                        let nsByteRange = NSMakeRange(index * stride + offset, bytesPerVector)
+                        let byteRange = Range(nsByteRange)
+
+                        let buffer = UnsafeMutableBufferPointer(start: vectorData, count: componentsPerVector)
+                        vertexSource.data.copyBytes(to: buffer, from: byteRange)
+                        let vector = SCNVector3Make(buffer[0], buffer[1], buffer[2])
+                        return vector
+                    }
+                    
+                    var i = 0
+                    while i < 8 {
+                        if let pos = vertices.randomElement() {
+                            var tooclose = false
+                            for city in cities {
+                                let a = SIMD3<Float>(pos.x, pos.y, pos.z)
+                                let b = SIMD3<Float>(city.position.x, city.position.y, city.position.z)
+                                if distance(a, b) < 0.2 {
+                                    tooclose = true
+                                    break
+                                }
+                            }
+                            if tooclose { continue }
+                            let node = SCNNode(geometry: lilCube)
+                            node.position = pos
+                            world.addChildNode(node)
+                            i += 1
+                        }
+                    }
+                }
             }
         }
         
         if let azul = world.childNode(withName: "MundoAzul reference", recursively: false) {
             if let ag = azul.childNodes.first?.geometry {
                 azul.physicsBody = SCNPhysicsBody(type: .kinematic, shape: SCNPhysicsShape(geometry: ag, options: nil))
-                print("azul pb")
-                if let vertexSources = azul.geometry?.sources(for: .vertex) {
-                    for v in vertexSources {
-                        v.dataStride
-                    }
-                }
+                
             }
         }
         
@@ -177,3 +220,5 @@ class GameViewController: UIViewController, SCNSceneRendererDelegate {
     }
 
 }
+
+
